@@ -66,7 +66,15 @@
 (defn atualiza-tarefa
   "Esse endpoint atualizará uma determinada tarefa pelo ID."
   [request]
-  )
+  (let [tarefa-id (get-in request [:path-params :id])
+        tarefa-id-convertido-para-uuid (UUID/fromString tarefa-id)
+        nome (get-in request [:path-params :nome])
+        status (get-in request [:path-params :status])
+        tarefa (cria-item-de-tarefa-no-mapa tarefa-id-convertido-para-uuid nome status)
+        store (:store request)]
+    (swap! store assoc tarefa-id-convertido-para-uuid tarefa)
+    {:status 201 :body {:mensagem "A tarefa foi atualizada com sucesso!"
+                        :tarefa tarefa}}))
 
 (def routes (route/expand-routes #{["/hello-world" :get funcao-hello :route-name :hello-world]
                                    ["/tarefa" :post [db-interceptor cria-tarefa] :route-name :criar-tarefa] ;O "db-interceptor" será chamado antes da requisição para criar as tarefas. Ele colocará o "store", que é o nosso banco de dados, dentro da request, bastando apenas inserirmos a nova tarefa nesse mapa que foi injetado dentro da request..
