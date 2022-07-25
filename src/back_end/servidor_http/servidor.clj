@@ -2,7 +2,8 @@
   (:require
     [io.pedestal.http.route :as route]
     [io.pedestal.http :as http]
-    [back-end.database.database :as database])
+    [back-end.database.database :as database]
+    [io.pedestal.interceptor :as i])
   (:import (java.util UUID)))
 
 ;Essas duas funções serão executadas antes das requisições e servirão para
@@ -67,14 +68,15 @@
   "Esse endpoint atualizará uma determinada tarefa pelo ID."
   [request]
   (let [tarefa-id (get-in request [:path-params :id])
-        tarefa-id-convertido-para-uuid (UUID/fromString tarefa-id)
-        nome (get-in request [:path-params :nome])
-        status (get-in request [:path-params :status])
-        tarefa (cria-item-de-tarefa-no-mapa tarefa-id-convertido-para-uuid nome status)
+        tarefa-id-uuid (UUID/fromString tarefa-id)
+        nome (get-in request [:query-params :nome])
+        status (get-in request [:query-params :status])
+        tarefa (get-in request [:query-params :tarefa])
+        tarefa-criada (cria-item-de-tarefa-no-mapa nome status tarefa)
         store (:store request)]
-    (swap! store assoc tarefa-id-convertido-para-uuid tarefa)
+    (swap! store assoc tarefa-id-uuid tarefa-criada)
     {:status 201 :body {:mensagem "A tarefa foi atualizada com sucesso!"
-                        :tarefa tarefa}}))
+                        :tarefa tarefa-criada}}))
 
 (def routes (route/expand-routes #{["/hello-world" :get funcao-hello :route-name :hello-world]
                                    ["/tarefa" :post [db-interceptor cria-tarefa] :route-name :criar-tarefa] ;O "db-interceptor" será chamado antes da requisição para criar as tarefas. Ele colocará o "store", que é o nosso banco de dados, dentro da request, bastando apenas inserirmos a nova tarefa nesse mapa que foi injetado dentro da request..
