@@ -5,6 +5,8 @@
     [back-end.database.database :as database])
   (:import (java.util UUID)))
 
+;Essas duas funções serão executadas antes das requisições e servirão para
+;carregar o banco de dados diretamente na requisição que está sendo enviada.
 (defn assoc-store
   "Estamos obtendo o banco de dados de um namespace externo e inserindo-o na chave ':store' da requisição, que está dentro do contexto recebido."
   [context]
@@ -50,9 +52,27 @@
   [request]
   {:status 200 :body @(:store request)})
 
+;O endpoint abaixo será responsável por deletar uma determinada tarefa.
+(defn deleta-tarefa
+  "Esse endpoint deletará uma determinada tarefa pelo ID."
+  [request]
+  (let [store (:store request) ;Estamos obtendo o banco de dados que está na memória e foi carregado pela função "assoc-store", chamada pelo "db-interceptor".
+        tarefa-id (get-in request [:path-params :id])
+        tarefa-id-convertida-para-uuid (UUID/fromString tarefa-id)] ;Como ao criar tarefas estamos armazenando um UUID, temos que converter o ID recebido pela string para um objeto que também está no formato UUID, caso contrário o Clojure não identificará que dois UUIDs são iguais por causa do tipo deles.
+    (swap! store dissoc tarefa-id-convertida-para-uuid) ;Estamos utilizando a função "swap" para retirarmos a tarefa em que o ID foi passado.
+    {:status 200 :body {:mensagem "Removido com sucesso!"}}))
+
+;O endpoint abaixo será responsável por atualizar uma determinada tarefa.
+(defn atualiza-tarefa
+  "Esse endpoint atualizará uma determinada tarefa pelo ID."
+  [request]
+  )
+
 (def routes (route/expand-routes #{["/hello-world" :get funcao-hello :route-name :hello-world]
                                    ["/tarefa" :post [db-interceptor cria-tarefa] :route-name :criar-tarefa] ;O "db-interceptor" será chamado antes da requisição para criar as tarefas. Ele colocará o "store", que é o nosso banco de dados, dentro da request, bastando apenas inserirmos a nova tarefa nesse mapa que foi injetado dentro da request..
-                                   ["/tarefa" :get [db-interceptor lista-tarefas] :route-name :lista-tarefas]}))
+                                   ["/tarefa" :get [db-interceptor lista-tarefas] :route-name :lista-tarefas]
+                                   ["/tarefa/:id" :delete [db-interceptor deleta-tarefa] :route-name :deleta-tarefa]
+                                   ["/tarefa/:id" :patch [db-interceptor atualiza-tarefa] :route-name :atualiza-tarefa]}))
 
 (def service-map
   {::http/routes routes
