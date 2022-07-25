@@ -2,8 +2,20 @@
   (:require
     [io.pedestal.http.route :as route]
     [io.pedestal.http :as http]
-    [io.pedestal.test :as test])
+    [back-end.database.database :as database])
   (:import (java.util UUID)))
+
+(defn assoc-store
+  "Estamos obtendo o banco de dados de um namespace externo e inserindo-o na chave ':store' da requisição, que está dentro do contexto recebido."
+  [context]
+  (update context :request assoc :store database/store))
+
+(def db-interceptor
+  "Essa função interceptará a função final, ela será como um 'filtro'. Ele retornará o nome da rota, que é 'db-interceptor' e executará a função 'assoc-store', que carregará o banco de dados, que está em memória, na
+  requisição, que está dentro do contexto, através da chave ':store', assim, 'injetaremos' o banco de dados em memória
+  diretamente na requisição que está sendo feita."
+  {:nome :db-interceptor
+   :enter assoc-store})
 
 ;Essa função representará o primeiro endpoint na aplicação.
 (defn funcao-hello
@@ -12,11 +24,6 @@
   {:status 200 ;Esse será o status de retorno.
    :body   (str "Hello World, " (get-in request [:query-params :name] " Retorno padrão caso nenhum parâmetro 'name' seja enviado!")) ;Obtendo o parâmetro "name" que será enviado via request parameters pela URL.
    }) ;Esse será o retorno do end-point.
-
-;Esse mapa representará um banco de dados em memória.
-;{id {tarefa_id tarefa_nome tarefa_status}
-;{id {tarefa_id tarefa_nome tarefa_status}}
-(def store (atom {})) ;O "store" é um "atom", ou seja, um símbolo que pode ser alterado. Ele não possui a característica de imutabilidade, assim, podemos alterar o estado desse símbolo. Ele será o "banco de dados" em memória da aplicação.
 
 ;;Endpoint de criar tarefa
 (defn cria-item-de-tarefa-no-mapa ;Essa função criará um item de tarefa com os dados que foram fornecidos na requisição.
@@ -30,7 +37,8 @@
    (let [uuid (UUID/randomUUID)
          nome (get-in request [:query-params :nome])
          status (get-in request [:query-params :status])
-         tarefa (get-in request [:query-params :tarefa])]
+         tarefa (get-in request [:query-params :tarefa])
+         store (:store request)]
      (swap! store assoc uuid (cria-item-de-tarefa-no-mapa nome status tarefa)) ;O "swap" possibilita a alteração de valor em um símbolo, que deve ser um "atom". Assim, por padrão, estamos "quebrando" a imutabilidade do Clojure nesse símbolo. Isso é necessário para simularmos um banco de dados.
      {:status 201 :body {:mensagem "A tarefa foi registrada com sucesso!"
                          :tarefa tarefa}})
@@ -40,11 +48,11 @@
 (defn lista-tarefas
   "Esse endpoint listará todas as tarefas que foram cadastradas."
   [request]
-  {:status 200 :body @store})
+  {:status 200 :body @(:store request)})
 
 (def routes (route/expand-routes #{["/hello-world" :get funcao-hello :route-name :hello-world]
-                                   ["/tarefa" :post cria-tarefa :route-name :criar-tarefa]
-                                   ["/tarefa" :get lista-tarefas :route-name :lista-tarefas]}))
+                                   ["/tarefa" :post [db-interceptor cria-tarefa] :route-name :criar-tarefa] ;O "db-interceptor" será chamado antes da requisição para criar as tarefas. Ele colocará o "store", que é o nosso banco de dados, dentro da request, bastando apenas inserirmos a nova tarefa nesse mapa que foi injetado dentro da request..
+                                   ["/tarefa" :get [db-interceptor lista-tarefas] :route-name :lista-tarefas]}))
 
 (def service-map
   {::http/routes routes
