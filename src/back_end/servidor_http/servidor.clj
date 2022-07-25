@@ -91,7 +91,15 @@
    ::http/join?  false}) ;Em ambiente de dev, essa configuração é importante para o Clojure não travar a thread ao iniciar o processo, assim, podemos continuar testando a aplicação. Em ambiente de produção, não precisamos dessa configuração, pois se a thread morrer, o serviço deverá morrer também.
 
 
-(http/start (http/create-server service-map))
+(def service-map-com-interceptor
+  "Esse service-map já está com um interceptor inserido, assim, ele servirá para todas
+  as rotas, e não será mais necessário a inserção de um interceptor, de forma manual, em
+  cada rota da aplicação."
+  (-> service-map
+      (http/default-interceptors)
+      (update ::http/interceptors conj (i/interceptor db-interceptor))))
+
+(http/start (http/create-server service-map-com-interceptor))
 
 ;(def server (atom nil))
 ;(test/response-for (::http/service-fn @server) :get "/hello-world")
